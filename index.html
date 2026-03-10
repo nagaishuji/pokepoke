@@ -16,13 +16,16 @@
         button { padding: 12px 24px; cursor: pointer; background: var(--primary); color: white; border: none; border-radius: 10px; font-weight: bold; width: 92%; transition: 0.2s; }
         button:active { transform: scale(0.98); }
         #result { margin-top: 15px; font-size: 1.1em; font-weight: bold; min-height: 1.5em; }
-        #description { margin-top: 15px; font-size: 0.85em; color: #444; text-align: left; background: #fffde7; padding: 12px; border-radius: 10px; display: none; }
+        #description { margin-top: 15px; font-size: 0.85em; color: #444; text-align: left; background: #fffde7; padding: 12px; border-radius: 10px; display: none; white-space: pre-wrap; }
         .final-screen { padding: 20px; }
     </style>
 </head>
 <body>
 
-<div class="warning"> アプリを閉じたり更新すると<br>最初からになる場合があります</div>
+<div class="warning">
+    アプリを閉じたり更新すると最初からになります<br>
+    <strong>💡 ひらがな・カタカナどちらでもOK！</strong>
+</div>
 
 <div id="quiz-container">
     <div id="stats">
@@ -31,7 +34,7 @@
     </div>
     <div id="quiz-content">
         <img id="poke-img" src="" alt="ポケモン">
-        <input type="text" id="answer-input" placeholder="なまえをいれてね(ひらがなorカタカナ)" autocomplete="off">
+        <input type="text" id="answer-input" placeholder="なまえをいれてね" autocomplete="off">
         <button id="btn-action" onclick="checkAnswer()">決定！</button>
         <div id="result"></div>
         <div id="description"></div>
@@ -43,6 +46,7 @@
     let questionCount = 0;
     let correctCount = 0;
     let isAnswered = false;
+    let usedIds = []; // 今回の挑戦で出たポケモンのIDを記録するリスト
 
     function toKatakana(str) {
         return str.replace(/[ぁ-ん]/g, s => String.fromCharCode(s.charCodeAt(0) + 0x60));
@@ -59,17 +63,23 @@
         document.getElementById('q-count').innerText = questionCount;
         document.getElementById('result').innerText = "";
         document.getElementById('description').style.display = "none";
+        
         const input = document.getElementById('answer-input');
         input.value = "";
         input.disabled = false;
-        input.focus();
         
         const btn = document.getElementById('btn-action');
         btn.innerText = "決定！";
         btn.onclick = checkAnswer;
 
-        const id = Math.floor(Math.random() * 1025) + 1;
-        
+        // --- 重複しないIDを選ぶ ---
+        let id;
+        do {
+            id = Math.floor(Math.random() * 1025) + 1;
+        } while (usedIds.includes(id));
+        usedIds.push(id);
+        // -----------------------
+
         try {
             const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}/`);
             const data = await res.json();
@@ -77,14 +87,21 @@
             const flavor = data.flavor_text_entries.find(f => f.language.name === "ja");
             document.getElementById('description').innerText = flavor ? flavor.flavor_text.replace(/\f/g, ' ') : "説明なし";
             document.getElementById('poke-img').src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+            
+            // 通信が終わって画像が出たら入力欄にフォーカスを合わせる
+            input.focus();
         } catch (e) {
+            // エラー時はリストから外して再取得
+            usedIds.pop();
+            questionCount--;
             nextPokemon();
         }
     }
 
     function checkAnswer() {
         if (isAnswered) return;
-        const userAns = toKatakana(document.getElementById('answer-input').value.trim());
+        const input = document.getElementById('answer-input');
+        const userAns = toKatakana(input.value.trim());
         const resDiv = document.getElementById('result');
         
         if (userAns === currentPokemonName) {
@@ -99,10 +116,11 @@
 
         document.getElementById('description').style.display = "block";
         isAnswered = true;
-        document.getElementById('answer-input').disabled = true;
+        input.disabled = true;
         const btn = document.getElementById('btn-action');
         btn.innerText = "次へすすむ";
         btn.onclick = nextPokemon;
+        btn.focus(); // 「次へ」ボタンにフォーカスを当てる（連続タップしやすくするため）
     }
 
     function showFinalResult() {
@@ -119,9 +137,19 @@
         `;
     }
 
+    // Enterキーでも決定できるようにする
+    document.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            if (!isAnswered) {
+                checkAnswer();
+            } else if (questionCount <= 10) {
+                nextPokemon();
+            }
+        }
+    });
+
     nextPokemon();
 </script>
 
 </body>
 </html>
-
