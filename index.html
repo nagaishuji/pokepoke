@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ポケモン1000匹ノック</title>
+    <title>ポケモンクイズ</title>
     <style>
         :root { --primary: #ef5350; --bg: #f0f2f5; }
         body { text-align: center; font-family: sans-serif; background: var(--bg); margin: 0; padding: 20px; }
@@ -13,43 +13,88 @@
         img { width: 100%; max-width: 200px; height: auto; background: #f9f9f9; border-radius: 50%; margin: 10px 0; }
         input { padding: 12px; width: 85%; margin-bottom: 15px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; outline: none; }
         input:focus { border-color: var(--primary); }
-        button { padding: 12px 24px; cursor: pointer; background: var(--primary); color: white; border: none; border-radius: 10px; font-weight: bold; width: 92%; transition: 0.2s; }
+        button { padding: 12px 24px; cursor: pointer; background: var(--primary); color: white; border: none; border-radius: 10px; font-weight: bold; width: 92%; transition: 0.2s; margin: 5px 0; }
         button:active { transform: scale(0.98); }
+        .btn-small { padding: 8px 16px; width: 45%; font-size: 0.9em; display: inline-block; margin: 2%; }
         #result { margin-top: 15px; font-size: 1.1em; font-weight: bold; min-height: 1.5em; }
         #description { margin-top: 15px; font-size: 0.85em; color: #444; text-align: left; background: #fffde7; padding: 12px; border-radius: 10px; display: none; white-space: pre-wrap; }
-        .final-screen { padding: 20px; }
+        .mode-select, .region-select { padding: 10px; }
     </style>
 </head>
 <body>
 
 <div class="warning">
-    アプリを閉じたり更新すると最初からになります<br>
+    アプリを閉じたり更新するとリセットされます<br>
     <strong>💡 ひらがな・カタカナどちらでもOK！</strong>
 </div>
 
 <div id="quiz-container">
-    <div id="stats">
-        <span>問目: <span id="q-count">1</span> / 10</span>
-        <span>正解: <span id="c-count">0</span></span>
-    </div>
     <div id="quiz-content">
-        <img id="poke-img" src="" alt="ポケモン">
-        <input type="text" id="answer-input" placeholder="なまえをいれてね" autocomplete="off">
-        <button id="btn-action" onclick="checkAnswer()">決定！</button>
-        <div id="result"></div>
-        <div id="description"></div>
+        <div class="mode-select">
+            <h2>モードをえらんでね</h2>
+            <button onclick="selectMode('name')">なまえをあてる</button>
+            <button onclick="selectMode('type')">タイプをあてる</button>
+        </div>
     </div>
 </div>
 
 <script>
+    let quizMode = "";
+    let minId = 1;
+    let maxId = 1025;
     let currentPokemonName = "";
+    let currentPokemonTypes = [];
     let questionCount = 0;
     let correctCount = 0;
     let isAnswered = false;
-    let usedIds = []; // 今回の挑戦で出たポケモンのIDを記録するリスト
+    let usedIds = [];
 
-    function toKatakana(str) {
-        return str.replace(/[ぁ-ん]/g, s => String.fromCharCode(s.charCodeAt(0) + 0x60));
+    const typeTranslations = {
+        normal: "ノーマル", fire: "ほのお", water: "みず", grass: "くさ", electric: "でんき",
+        ice: "こおり", fighting: "かくとう", poison: "どく", ground: "じめん", flying: "ひこう",
+        psychic: "エスパー", bug: "むし", rock: "いわ", ghost: "ゴースト", dragon: "ドラゴン",
+        steel: "はがね", fairy: "フェアリー", dark: "あく"
+    };
+
+    function toKatakana(str) { return str.replace(/[ぁ-ん]/g, s => String.fromCharCode(s.charCodeAt(0) + 0x60)); }
+    function toHiragana(str) { return str.replace(/[ァ-ン]/g, s => String.fromCharCode(s.charCodeAt(0) - 0x60)); }
+
+    function selectMode(mode) {
+        quizMode = mode;
+        document.getElementById('quiz-content').innerHTML = `
+            <div class="region-select">
+                <h2>ちほうをえらんでね</h2>
+                <button class="btn-small" onclick="startGame(1, 151)">カントー</button>
+                <button class="btn-small" onclick="startGame(152, 251)">ジョウト</button>
+                <button class="btn-small" onclick="startGame(252, 386)">ホウエン</button>
+                <button class="btn-small" onclick="startGame(387, 493)">シンオウ</button>
+                <button class="btn-small" onclick="startGame(494, 649)">イッシュ</button>
+                <button class="btn-small" onclick="startGame(650, 721)">カロス</button>
+                <button class="btn-small" onclick="startGame(722, 809)">アローラ</button>
+                <button class="btn-small" onclick="startGame(810, 898)">ガラル</button>
+                <button class="btn-small" onclick="startGame(899, 1025)">パルデア・他</button>
+                <button style="background:#555" onclick="startGame(1, 1025)">ぜんこく図鑑</button>
+            </div>
+        `;
+    }
+
+    function startGame(min, max) {
+        minId = min;
+        maxId = max;
+        document.getElementById('quiz-container').innerHTML = `
+            <div id="stats">
+                <span>問目: <span id="q-count">1</span> / 10</span>
+                <span>正解: <span id="c-count">0</span></span>
+            </div>
+            <div id="quiz-main">
+                <img id="poke-img" src="" alt="ポケモン">
+                <input type="text" id="answer-input" placeholder="${quizMode === 'name' ? 'なまえを入力' : 'タイプを入力'}" autocomplete="off">
+                <button id="btn-action" onclick="checkAnswer()">決定！</button>
+                <div id="result"></div>
+                <div id="description"></div>
+            </div>
+        `;
+        nextPokemon();
     }
 
     async function nextPokemon() {
@@ -57,41 +102,41 @@
             showFinalResult();
             return;
         }
-
         isAnswered = false;
         questionCount++;
         document.getElementById('q-count').innerText = questionCount;
-        document.getElementById('result').innerText = "";
+        document.getElementById('result').innerText = "読み込み中...";
         document.getElementById('description').style.display = "none";
-        
         const input = document.getElementById('answer-input');
         input.value = "";
         input.disabled = false;
-        
         const btn = document.getElementById('btn-action');
         btn.innerText = "決定！";
         btn.onclick = checkAnswer;
 
-        // --- 重複しないIDを選ぶ ---
         let id;
+        const rangeSize = maxId - minId + 1;
         do {
-            id = Math.floor(Math.random() * 1025) + 1;
+            id = Math.floor(Math.random() * rangeSize) + minId;
         } while (usedIds.includes(id));
         usedIds.push(id);
-        // -----------------------
 
         try {
-            const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}/`);
-            const data = await res.json();
-            currentPokemonName = data.names.find(n => n.language.name === "ja").name;
-            const flavor = data.flavor_text_entries.find(f => f.language.name === "ja");
-            document.getElementById('description').innerText = flavor ? flavor.flavor_text.replace(/\f/g, ' ') : "説明なし";
-            document.getElementById('poke-img').src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+            const resSpecies = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}/`);
+            const dataSpecies = await resSpecies.json();
+            currentPokemonName = dataSpecies.names.find(n => n.language.name === "ja").name;
+            const flavor = dataSpecies.flavor_text_entries.find(f => f.language.name === "ja");
             
-            // 通信が終わって画像が出たら入力欄にフォーカスを合わせる
+            const resPoke = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}/`);
+            const dataPoke = await resPoke.json();
+            currentPokemonTypes = dataPoke.types.map(t => typeTranslations[t.type.name]);
+
+            document.getElementById('poke-img').src = dataPoke.sprites.front_default || "";
+            document.getElementById('result').innerText = "";
+            document.getElementById('description').innerText = 
+                `名前: ${currentPokemonName}\nタイプ: ${currentPokemonTypes.join('・')}\n\n${flavor ? flavor.flavor_text.replace(/\f/g, ' ') : "説明なし"}`;
             input.focus();
         } catch (e) {
-            // エラー時はリストから外して再取得
             usedIds.pop();
             questionCount--;
             nextPokemon();
@@ -101,16 +146,26 @@
     function checkAnswer() {
         if (isAnswered) return;
         const input = document.getElementById('answer-input');
-        const userAns = toKatakana(input.value.trim());
+        const rawInput = input.value.trim();
         const resDiv = document.getElementById('result');
-        
-        if (userAns === currentPokemonName) {
+        let isCorrect = false;
+
+        if (quizMode === 'name') {
+            isCorrect = (toKatakana(rawInput) === toKatakana(currentPokemonName));
+        } else {
+            const hiraInput = toHiragana(rawInput);
+            const kataInput = toKatakana(rawInput);
+            isCorrect = currentPokemonTypes.some(t => (hiraInput === toHiragana(t) || kataInput === toKatakana(t)));
+        }
+
+        if (isCorrect) {
             resDiv.innerText = "◯ 正解！";
             resDiv.style.color = "#4caf50";
             correctCount++;
             document.getElementById('c-count').innerText = correctCount;
         } else {
-            resDiv.innerText = "× 正解は「" + currentPokemonName + "」";
+            const correctText = quizMode === 'name' ? currentPokemonName : currentPokemonTypes.join('・');
+            resDiv.innerText = "× 正解は「" + correctText + "」";
             resDiv.style.color = "#f44336";
         }
 
@@ -120,36 +175,27 @@
         const btn = document.getElementById('btn-action');
         btn.innerText = "次へすすむ";
         btn.onclick = nextPokemon;
-        btn.focus(); // 「次へ」ボタンにフォーカスを当てる（連続タップしやすくするため）
+        btn.focus();
     }
 
     function showFinalResult() {
         const rate = (correctCount / 10) * 100;
-        const passed = rate >= 90;
-        document.getElementById('quiz-content').innerHTML = `
+        document.getElementById('quiz-container').innerHTML = `
             <div class="final-screen">
                 <h2>結果発表</h2>
-                <h1 style="font-size: 3em; color: ${passed ? '#4caf50' : '#f44336'}">${rate}%</h1>
+                <h1 style="font-size: 3em; color: ${rate >= 90 ? '#4caf50' : '#f44336'}">${rate}%</h1>
                 <p>10問中 ${correctCount}問正解</p>
-                <p>${passed ? "合格！天才！" : "残念！不合格..."}</p>
-                <button onclick="location.reload()">もう一度挑戦</button>
+                <button onclick="location.reload()">タイトルへもどる</button>
             </div>
         `;
     }
 
-    // Enterキーでも決定できるようにする
     document.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
-            if (!isAnswered) {
-                checkAnswer();
-            } else if (questionCount <= 10) {
-                nextPokemon();
-            }
+            const btn = document.getElementById('btn-action');
+            if (btn) btn.click();
         }
     });
-
-    nextPokemon();
 </script>
-
 </body>
 </html>
